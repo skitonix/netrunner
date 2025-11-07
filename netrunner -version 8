@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>netrunner</title>
+  <style>
+    :root{
+      --bg:#0a0c10; --panel:#0e1117; --panel2:#0b0e13; --text:#e2e8f0; --muted:#94a3b8; --neon:#00f0ff; --neon2:#ff00e6;
+      --hp:#ff3b3b; --food:#ffd166; --drink:#60a5fa; --xp:#22c55e; --money:#a3e635; --armor:#38bdf8;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:radial-gradient(1200px 800px at 20% -10%, rgba(0,240,255,.12), transparent),radial-gradient(900px 700px at 120% 120%, rgba(255,0,230,.10), transparent),var(--bg);color:var(--text);font-family:ui-monospace,Menlo,Consolas,monospace;letter-spacing:.2px}
+    .app{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;padding:16px;height:100%}
+    .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid #1f2937;border-radius:14px;box-shadow:0 0 0 1px rgba(0,240,255,.06),0 20px 60px rgba(0,0,0,.35);overflow:hidden}
+    .header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #1f2937;background:linear-gradient(90deg,rgba(0,240,255,.07),transparent 40%, rgba(255,0,230,.07))}
+    .header .title{font-weight:700;text-transform:uppercase;letter-spacing:.12em}
+    .hud{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;padding:10px;background:linear-gradient(180deg,rgba(0,240,255,.06),transparent);border-bottom:1px dashed #1f2937}
+    .bar{display:grid;gap:6px}
+    .bar label{font-size:.72rem;color:var(--muted)}
+    .bar .track{height:10px;background:#0b1220;border:1px solid #1f2937;border-radius:999px;overflow:hidden;box-shadow:inset 0 0 12px rgba(0,0,0,.6)}
+    .bar .fill{height:100%}
+    .fill.hp{background:linear-gradient(90deg,#ff3b3b,#ff7a7a)}
+    .fill.food{background:linear-gradient(90deg,#ffd166,#f59e0b)}
+    .fill.drink{background:linear-gradient(90deg,#60a5fa,#22d3ee)}
+    .fill.xp{background:linear-gradient(90deg,#22c55e,#86efac)}
+    .fill.money{background:linear-gradient(90deg,#a3e635,#bef264)}
+    .fill.armor{background:linear-gradient(90deg,#38bdf8,#93c5fd)}
+    .statline{display:flex;gap:8px;align-items:center;font-size:.8rem;color:var(--muted)}
+    .left{display:grid;grid-template-rows:auto 1fr;gap:12px}
+    .right{display:grid;grid-template-rows:auto auto 1fr auto;gap:12px}
+
+    .mapwrap{display:grid;grid-template-rows:auto 1fr}
+    .maparea{padding:14px;display:flex;justify-content:center;position:relative}
+    .asciimap{display:inline-block;border:1px solid #1f2937;border-radius:12px;padding:16px;overflow:auto;background:#0a1018}
+    .row{height:24px;white-space:nowrap}
+    .cell{display:inline-block;width:16px;height:20px;margin:2px 0;text-align:center;cursor:default;user-select:none}
+    .coords{
+      position:absolute; left:6px; bottom:6px;
+      background:#0b1220; border:1px solid #1f2937; border-radius:8px;
+      padding:2px 6px; font-size:.78rem; color:#94a3b8;
+      box-shadow:0 0 0 1px rgba(0,240,255,.08);
+      pointer-events:none; z-index:1;
+    }
+
+    .cell.player{color:var(--neon2);text-shadow:0 0 8px rgba(255,0,230,.6),0 0 18px rgba(255,0,230,.35)}
+    .cell.wall{color:#334155}
+    .cell.road{color:#64748b}
+    .cell.shop{color:#a3e635}
+    .cell.super{color:#7dd3fc}
+    .cell.job{color:#22d3ee}
+    .cell.rest{color:#f472b6}
+    .cell.house{color:#fbbf24}
+    .cell.fence{color:#22c55e}
+    .cell.wh{color:#93c5fd}
+    .cell.weapon{color:#fca5a5}
+    .cell.car{color:#a78bfa}
+    .cell.gas{color:#60a5fa}
+    .cell.repair{color:#94a3b8}
+    .cell.station{color:#22c55e}
+    .cell.office{color:#38bdf8}
+    .cell.gang{color:#ef4444}
+    .cell.crack{color:#36f9a3}
+    .cell.av{color:#00e5ff;text-shadow:0 0 6px rgba(0,229,255,.4)}
+    .soft{color:var(--muted)}
+    .console{padding:12px 14px;font-size:.9rem;height:100%;overflow:auto}
+    .logline{opacity:.95;margin:.25rem 0}
+    .logline .tm{color:#64748b;margin-right:.5rem}
+    .logline.ok{color:#a7f3d0}.logline.warn{color:#fde68a}.logline.bad{color:#fecaca}
+    .actions{padding:12px;display:grid;gap:10px}
+    .btn{background:#0e1624;border:1px solid #334155;padding:10px 12px;border-radius:10px;cursor:pointer;color:var(--text);box-shadow:0 0 0 1px rgba(0,240,255,.08)}
+    .btn:hover{border-color:#3b82f6;box-shadow:0 0 0 1px rgba(0,240,255,.18)}
+    .drawer{display:grid;grid-template-rows:auto 1fr auto}
+    .drawer .content{padding:12px 14px;overflow:auto}
+    .drawer h3{margin:.2rem 0 .5rem;letter-spacing:.08em;text-transform:uppercase;font-size:.9rem;color:#93c5fd}
+    .list{display:grid;gap:8px}
+    .item{border:1px solid #1f2937;background:#0b1220;border-radius:10px;padding:10px}
+    .item .meta{font-size:.82rem;color:var(--muted)}
+    .item .row{display:flex;justify-content:space-between;align-items:center}
+    .footer{padding:10px 14px;border-top:1px solid #1f2937;display:flex;gap:8px;justify-content:space-between;align-items:center;font-size:.85rem;color:var(--muted)}
+    .menu-card .section{padding:12px 14px}
+    .glow{color:var(--neon);text-shadow:0 0 8px rgba(0,240,255,.75),0 0 18px rgba(0,240,255,.35)}
+    .invgrid{display:grid;grid-template-columns:repeat(8,32px);grid-auto-rows:32px;gap:6px}
+    .invcell{width:32px;height:32px;border:1px solid #334155;background:#0b1220;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:.75rem;color:#94a3b8}
+    .invcell.sel{outline:2px solid #22d3ee}
+    .gearline{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .slotcard{border:1px solid #243244;background:#0b1220;border-radius:10px;padding:8px}
+    .slotname{font-size:.8rem;color:#7dd3fc}
+    .slotval{font-weight:700}
+    .small{font-size:.82rem;color:#94a3b8}
+    .barwrap{border:1px solid #243244;border-radius:10px;padding:10px;background:#0b1220}
+    .timetrack{position:relative;height:12px;border:1px solid #334155;border-radius:999px;background:#0a0f1a;margin:8px 0}
+    .timercur{position:absolute;top:-3px;width:6px;height:18px;border-radius:2px;background:#22d3ee;box-shadow:0 0 8px rgba(34,211,238,.7)}
+    .hitzone{position:absolute;top:0;bottom:0;border-left:1px dashed #22c55e;border-right:1px dashed #22c55e;opacity:.6}
+    .pill{display:inline-block;border:1px solid #334155;border-radius:8px;padding:2px 8px;margin:0 6px 8px 0;font-size:.72rem}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="left">
+      <div class="card mapwrap">
+        <div class="header">
+          <div class="title glow">netrunner</div>
+          <div class="statline"><span id="clock">00:00</span> · <span id="day">Day 1</span> · <span id="sector">Sector A</span></div>
+        </div>
+        <div class="hud">
+          <div class="bar"><label>HP</label><div class="track"><div id="hpFill" class="fill hp"></div></div><div class="statline"><span id="hpVal">100</span>/100</div></div>
+          <div class="bar"><label>FOOD</label><div class="track"><div id="foodFill" class="fill food"></div></div><div class="statline"><span id="foodVal">60</span>/100</div></div>
+          <div class="bar"><label>DRINK</label><div class="track"><div id="drinkFill" class="fill drink"></div></div><div class="statline"><span id="drinkVal">60</span>/100</div></div>
+          <div class="bar"><label>XP</label><div class="track"><div id="xpFill" class="fill xp"></div></div><div class="statline"><span id="xpVal">0</span>/100</div></div>
+          <div class="bar"><label>₿</label><div class="track"><div id="moneyFill" class="fill money"></div></div><div class="statline"><span id="moneyVal">250</span> cr</div></div>
+          <div class="bar"><label>ARMOR</label><div class="track"><div id="armorFill" class="fill armor"></div></div><div class="statline"><span id="armorVal">0</span></div></div>
+        </div>
+
+
+        <div class="maparea">
+          <div id="map" class="asciimap"></div>
+          <div id="coords" class="coords">0 x 0</div>
+        </div>
+
+        <div class="legend" style="padding:0 16px 12px">
+          <span class="pill"># Wall</span>
+          <span class="pill">· Road</span>
+          <span class="pill" style="color:var(--neon2)">▲ You</span>
+          <span class="pill" style="color:var(--xp)">J Job</span>
+          <span class="pill" style="color:var(--money)">S Shop</span>
+          <span class="pill" style="color:#7dd3fc">U Supermarket</span>
+          <span class="pill" style="color:#f472b6">R Restaurant</span>
+          <span class="pill" style="color:#fbbf24">H House</span>
+          <span class="pill" style="color:#93c5fd">W Warehouse</span>
+          <span class="pill" style="color:#fca5a5">W Weapons</span>
+          <span class="pill" style="color:#a78bfa">C Car Dealer</span>
+          <span class="pill" style="color:#60a5fa">G Gas</span>
+          <span class="pill" style="color:#94a3b8">M Repair</span>
+          <span class="pill" style="color:#22c55e">#</span>
+          <span class="pill" style="color:#38bdf8">Q Office</span>
+          <span class="pill" style="color:#ef4444">T Gang Territory</span>
+          <span class="pill" style="color:#36f9a3">&gt; Crack in the Wall</span>
+          <span class="pill" style="color:#00e5ff">A AV Station</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="header"><div class="title">TERMINAL</div></div>
+        <div id="log" class="console"></div>
+      </div>
+    </section>
+
+    <section class="right">
+      <div class="card drawer">
+        <div class="header"><div class="title">LOCATION</div><div id="locName" class="soft">—</div></div>
+        <div class="content">
+          <h3>Actions</h3>
+          <div id="locActions" class="list"></div>
+          <h3>Details</h3>
+          <div id="locDetails" class="list"></div>
+        </div>
+        <div class="footer">
+          <div>Travel: <span id="travelCost" class="soft">—</span></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" id="btnWalk">Walk</button>
+            <button class="btn" id="btnTaxi">Taxi</button>
+            <button class="btn" id="btnDrive">Drive</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card menu-card">
+        <div class="header"><div class="title">MENU</div><div class="soft">Systems</div></div>
+        <div class="section" style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" id="btnPhone">Phone</button>
+          <button class="btn" id="btnCharacter">Character</button>
+          <button class="btn" id="btnInventory">Inventory</button>
+          <button class="btn" id="btnGarage">Garage</button>
+          <button class="btn" id="btnSettings">Settings</button>
+        </div>
+        <div class="section" id="menuPanel"></div>
+      </div>
+
+      <div class="card">
+        <div class="header"><div class="title">QUICK</div><div class="soft">Inventory & Save</div></div>
+        <div class="actions">
+          <div class="row" style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn" id="btnEat">Eat (−1 ration)</button>
+            <button class="btn" id="btnDrink">Drink (−1 water)</button>
+            <button class="btn" id="btnMed">Use Medkit</button>
+            <button class="btn" id="btnSave">Save</button>
+            <button class="btn" id="btnLoad">Load</button>
+          </div>
+        </div>
+        <div class="footer"><div class="soft" id="invText">Inventory: grid-based</div></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+  // main state
+  const DEV={infMoney:0}; // debug mode (inf money cheat)
+  const SECTORS = { A: {name:'Sector A', build: buildSectorA}, B: {name:'Sector B', build: buildSectorB}, C:{name:'Sector C', build: buildSectorC} };
+  let currentSector = 'A';
+  const W=38, H=18;
+  const TILES = { WALL:'#', ROAD:'·', PLAYER:'▲', SHOP:'S', SUPER:'U', JOB:'J', REST:'R', HOUSE:'H', WH:'W', FENCE:'F', WEAPON:'W', CAR:'C', GAS:'G', REPAIR:'M', STATION:'O', OFFICE:'Q', GANG:'T', CRACK:'>', AV:'A' };
+  function blankMap(){ return Array.from({length:H},(_,y)=>Array.from({length:W},(_,x)=>({ch:TILES.WALL,type:'wall',x,y}))); }
+  function carveRoad(map,x1,y1,x2,y2){ for(let y=Math.min(y1,y2);y<=Math.max(y1,y2);y++) map[y][x1]={ch:TILES.ROAD,type:'road',x:x1,y}; for(let x=Math.min(x1,x2);x<=Math.max(x1,x2);x++) map[y2][x]={ch:TILES.ROAD,type:'road',x,y:y2}; }
+  function placePOI(map,p){ map[p.y][p.x] = {ch:p.ch, type:p.kind, x:p.x, y:p.y, name:p.name, desc:p.desc, sector:p.sector || currentSector}; }
+  function placeGangBlock(map,x,y,name){ const coords=[[x,y],[x+1,y],[x,y+1],[x+1,y+1]]; coords.forEach(([cx,cy])=>{ map[cy][cx]={ch:TILES.GANG,type:'gang',x:cx,y:cy,name,desc:'Hostile turf. Expect resistance.'}; }); }
+  function placeAV(map,cx,cy,name){ const coords=[[cx,cy],[cx-1,cy],[cx+1,cy],[cx,cy-1]]; coords.forEach(([x,y])=>{ map[y][x]={ch:TILES.AV,type:'avstation',x,y,name,desc:'Fly between sectors (secure AV).'}; }); }
+
+  // map
+  function buildSectorA(){
+    const m=blankMap();
+    carveRoad(m,3,2,34,2); carveRoad(m,3,5,34,5); carveRoad(m,3,9,34,9); carveRoad(m,3,13,34,13); carveRoad(m,3,16,34,16);
+    carveRoad(m,3,2,3,16); carveRoad(m,10,2,10,16); carveRoad(m,18,2,18,16); carveRoad(m,26,2,26,16); carveRoad(m,34,2,34,16);
+    const P=[
+      {x:3,y:2,ch:TILES.JOB,name:'Databank Exchange',kind:'job',desc:'Freelance data-scrape gigs.'},
+      {x:10,y:5,ch:TILES.SHOP,name:'Chroma Hardware',kind:'shop',desc:'Supplies & medkits.'},
+      {x:14,y:5,ch:TILES.SUPER,name:'HyperMart',kind:'supermarket',desc:'Groceries and basic gear.'},
+      {x:18,y:9,ch:TILES.REST,name:'Pink Noodle',kind:'restaurant',desc:'Hydra-sodas & noodles.'},
+      {x:26,y:13,ch:TILES.JOB,name:'Courier Hub',kind:'job',desc:'Parcel runs.'},
+      {x:34,y:5,ch:TILES.SHOP,name:'a small group of street stands',kind:'shop',desc:'Street vendors.'},
+      {x:10,y:13,ch:TILES.HOUSE,name:'Your apartment',kind:'playerhouse',desc:'your small apartment.'},
+      {x:18,y:5,ch:TILES.HOUSE,name:'virual hotel',kind:'house',desc:'a hotel with digital walls.'},
+      {x:26,y:9,ch:TILES.REST,name:'runner Café',kind:'restaurant',desc:'a café made for netrunners.'},
+      {x:34,y:13,ch:TILES.HOUSE,name:'cheap hotel',kind:'house',desc:'worst of the worst.'},
+      {x:6,y:5,ch:TILES.WH,name:'South Docks Warehouse',kind:'warehouse',desc:'Cargo staging.'},
+      {x:34,y:9,ch:TILES.FENCE,name:'Shadow Fence',kind:'fence',desc:'Moves hot goods.'},
+      {x:6,y:9,ch:TILES.WEAPON,name:'corp owned gunshop',kind:'weapons',desc:'buy your safety.'},
+      {x:22,y:5,ch:TILES.CAR,name:'g-9 supercenter',kind:'cardealer',desc:'the g-9 gas stations supercenter does not sell gas but sells cars.'},
+      {x:30,y:5,ch:TILES.GAS,name:'g-9',kind:'gas',desc:'all 9 gas types.'},
+      {x:30,y:13,ch:TILES.REPAIR,name:'small non corp repair shop',kind:'repair',desc:'ran by only one person.'},
+      {x:1,y:9,ch:TILES.CRACK,name:'a small crack in the sector walls to Sector C',kind:'crack',desc:'Crawl through (−30 HP) to Sector C.'}
+    ];
+    P.forEach(p=>placePOI(m,p));
+    placeGangBlock(m,20,6,'blacknet Turf');
+    placeAV(m,22,8,'Aerial Hub A');
+    return m;
+  }
+  function buildSectorB(){
+    const m=blankMap();
+    carveRoad(m,3,2,34,2); carveRoad(m,3,6,34,6); carveRoad(m,3,10,34,10); carveRoad(m,3,14,34,14);
+    carveRoad(m,3,2,3,16); carveRoad(m,14,2,14,16); carveRoad(m,24,2,24,16); carveRoad(m,34,2,34,16);
+    const P=[
+      {x:6,y:6,ch:TILES.WH,name:'North Stack Warehouse',kind:'warehouse',desc:'Cold storage.'},
+      {x:10,y:6,ch:TILES.SUPER,name:'open-market',kind:'supermarket',desc:'a building filled with stands not selves ran by the people.'},
+      {x:14,y:10,ch:TILES.CAR,name:'Luxury auto',kind:'cardealer',desc:'only for the high class.'},
+      {x:24,y:6,ch:TILES.WEAPON,name:'corpo weapons',kind:'weapons',desc:'Heavy pieces.'},
+      {x:30,y:10,ch:TILES.GAS,name:'g-9',kind:'gas',desc:'all 9 gas types.'},
+      {x:20,y:14,ch:TILES.REPAIR,name:'car mechanic',kind:'repair',desc:'not Certified.'},
+      {x:34,y:9,ch:TILES.CRACK,name:'a small crack in the sector walls to Sector C',kind:'crack',desc:'Crawl through (−30 HP) to Sector C.'}
+    ];
+    P.forEach(p=>placePOI(m,p));
+    placeGangBlock(m,26,10,'Chrome chooms turf');
+    placeAV(m,20,8,'Aerial Hub B');
+    return m;
+  }
+  function buildSectorC(){
+    const m=blankMap();
+    carveRoad(m,3,3,34,3); carveRoad(m,3,7,34,7); carveRoad(m,3,11,34,11); carveRoad(m,3,15,34,15);
+    carveRoad(m,3,3,3,16); carveRoad(m,12,3,12,16); carveRoad(m,22,3,22,16); carveRoad(m,34,3,34,16);
+    const P=[
+      {x:6,y:7,ch:TILES.WH,name:'choomba wherehouse',kind:'warehouse',desc:'Illicit cargo moves here owned by choomba.'},
+      {x:10,y:11,ch:TILES.SUPER,name:'zeromart',kind:'supermarket',desc:'a supermarket.'},
+      {x:14,y:7,ch:TILES.WEAPON,name:'gun van',kind:'weapons',desc:'a white van with the words guns for sale sprayed on the side.'},
+      {x:24,y:11,ch:TILES.OFFICE,name:'Oculink',kind:'office',desc:'the company that started the ai takeover of 2067.'},
+      {x:30,y:7,ch:TILES.FENCE,name:'small building',kind:'fence',desc:'we buy cargo without asking how you got it.'},
+      {x:1,y:9,ch:TILES.CRACK,name:'a small crack in the sector walls to Sector A',kind:'crack',desc:'Crawl through (−30 HP) to Sector A.'}
+    ];
+    P.forEach(p=>placePOI(m,p));
+    placeGangBlock(m,16,12,'termiroot turf');
+    placeAV(m,18,10,'Aerial Hub C');
+    return m;
+  }
+
+  let map = SECTORS[currentSector].build();
+
+  // state
+  const state = { x:6,y:2,hp:100,food:60,drink:60,xp:0,money:250,minute:8*60,day:1,inv:{}, gig:null, carriedCargo:false, stolen:false, vehicle:null, dead:false };
+  const settings = { autosave:true, autosaveInterval:60, saveAnnounce:false, logExpire:30 };
+  let intervals = { autosave:null, logClean:null };
+
+  // items
+  const items = {
+    ration:{id:'ration',name:'Ration',w:1,h:1,price:20,consume:'food25'},
+    water:{id:'water',name:'Water',w:1,h:1,price:15,consume:'drink25'},
+    medkit:{id:'medkit',name:'Medkit',w:1,h:1,price:60,consume:'heal35'},
+    energy:{id:'energy',name:'Energy Drink',w:1,h:1,price:25,consume:'drink40'},
+    vest:{id:'vest',name:'Armor Vest',w:2,h:2,price:280,slot:'armor',armor:10},
+    jacket:{id:'jacket',name:'Jacket',w:2,h:2,price:120,slot:'clothes',armor:3},
+    helmet:{id:'helmet',name:'Helmet',w:2,h:2,price:180,slot:'helmet',armor:8},
+    gloves:{id:'gloves',name:'Tactical Gloves',w:1,h:2,price:80,slot:'gloves',armor:1},
+    boots:{id:'boots',name:'Combat Boots',w:2,h:1,price:140,slot:'boots',armor:2},
+    trench:{id:'trench',name:'Kevlar Trenchcoat',w:2,h:3,price:420,slot:'clothes',armor:6},
+    knife:{id:'knife',name:'Knife',w:1,h:2,price:120,slot:'weapon',power:6},
+    bat:{id:'bat',name:'Bat',w:2,h:1,price:160,slot:'weapon',power:8},
+    pistol:{id:'pistol',name:'Pistol',w:2,h:1,price:420,slot:'weapon',power:12},
+    smg:{id:'smg',name:'SMG',w:2,h:2,price:900,slot:'weapon',power:18}
+  };
+  const gear = { armor:null, clothes:null, helmet:null, gloves:null, boots:null, weapon:null };
+  const GRID_W=8, GRID_H=6;
+  const invGrid = Array.from({length:GRID_H},()=>Array.from({length:GRID_W},()=>null));
+
+  //Bingle-bongle, dingle-dangle, yickety-do yickitey-dah, ping-pong, lippy-tappy, too-ta﻿h (very important)
+  const mapEl=document.getElementById('map');
+  const hpFill=document.getElementById('hpFill'),foodFill=document.getElementById('foodFill'),drinkFill=document.getElementById('drinkFill'),xpFill=document.getElementById('xpFill'),moneyFill=document.getElementById('moneyFill'),armorFill=document.getElementById('armorFill');
+  const hpVal=document.getElementById('hpVal'),foodVal=document.getElementById('foodVal'),drinkVal=document.getElementById('drinkVal'),xpVal=document.getElementById('xpVal'),moneyVal=document.getElementById('moneyVal'),armorVal=document.getElementById('armorVal');
+  const clockEl=document.getElementById('clock'), dayEl=document.getElementById('day'), invText=document.getElementById('invText');
+  const logEl=document.getElementById('log');
+  const locName=document.getElementById('locName'), locActions=document.getElementById('locActions'), locDetails=document.getElementById('locDetails');
+  const travelCostEl=document.getElementById('travelCost');
+  const btnWalk=document.getElementById('btnWalk'), btnTaxi=document.getElementById('btnTaxi'), btnDrive=document.getElementById('btnDrive');
+  const menuPanel=document.getElementById('menuPanel');
+  const coordsEl=document.getElementById('coords');
+
+  const cls=(c)=> (c.type==='wall'?'wall': c.type==='road'?'road': c.type==='shop'?'shop': c.type==='supermarket'?'super': c.type==='job'?'job': c.type==='restaurant'?'rest': c.type==='warehouse'?'wh': c.type==='fence'?'fence': c.type==='weapons'?'weapon': c.type==='cardealer'?'car': c.type==='gas'?'gas': c.type==='repair'?'repair': c.type==='station'?'station': c.type==='office'?'office': c.type==='gang'?'gang': c.type==='crack'?'crack': c.type==='avstation'?'av': c.type && c.type.includes('house')?'house':'road') + ((c.x===state.x&&c.y===state.y)?' player':'');
+
+  function renderMap(){
+    mapEl.innerHTML='';
+    for(let y=0;y<H;y++){
+      const row=document.createElement('div'); row.className='row';
+      for(let x=0;x<W;x++){
+        const c=map[y][x]; const sp=document.createElement('span'); sp.className='cell '+cls(c);
+        sp.textContent = (x===state.x&&y===state.y)? TILES.PLAYER : c.ch;
+        sp.addEventListener('click', ()=> selectLocation(c));
+        row.appendChild(sp);
+      }
+      mapEl.appendChild(row);
+    }
+    document.getElementById('sector').textContent = SECTORS[currentSector].name;
+    updateCoords();
+  }
+
+  function calcArmor(){
+    let a=0; Object.keys(gear).forEach(k=>{ const id=gear[k]; if(id&&items[id]&&items[id].armor) a+=items[id].armor; });
+    return Math.min(100,a*5);
+  }
+  function weaponPower(){ const id=gear.weapon; return id && items[id] && items[id].power ? items[id].power : 4; }
+  function syncHUD(){
+    const clamp=v=>Math.max(0,Math.min(100,v));
+    hpVal.textContent=Math.round(state.hp);
+    foodVal.textContent=Math.round(state.food);
+    drinkVal.textContent=Math.round(state.drink);
+    xpVal.textContent=Math.round(state.xp%100);
+    moneyVal.textContent=Math.round(state.money);
+    const armor=calcArmor(); armorVal.textContent=Math.round(armor);
+    hpFill.style.width=clamp(state.hp)+'%';
+    foodFill.style.width=clamp(state.food)+'%';
+    drinkFill.style.width=clamp(state.drink)+'%';
+    xpFill.style.width=clamp(state.xp%100)+'%';
+    moneyFill.style.width=Math.min(100,state.money/10)+'%';
+    armorFill.style.width=clamp(armor)+'%';
+    const h=Math.floor(state.minute/60)%24,m=state.minute%60; clockEl.textContent=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; dayEl.textContent=`Day ${state.day}`;
+    updateCoords();
+  }
+  function log(msg,l='ok'){
+    const d=document.createElement('div'); d.className=`logline ${l}`; d.dataset.ts=Date.now();
+    const tm=document.createElement('span'); tm.className='tm'; tm.textContent=`[${clockEl.textContent}]`;
+    d.appendChild(tm); d.append(msg); logEl.appendChild(d); logEl.scrollTop=logEl.scrollHeight;
+  }
+
+  // xy status
+  function updateCoords(){ coordsEl.textContent = `${state.x} x ${state.y}`; }
+
+  // location sytem
+  function atHere(c){ return c && state.x===c.x && state.y===c.y; }
+
+  // selection sys
+  let selected=null;
+  function selectLocation(c){
+    selected=c;
+    locName.textContent = (c.name? `${c.name} — ${cellTypeName(c.type)}` : `Tile (${c.x},${c.y})`);
+    locActions.innerHTML='';
+    locDetails.innerHTML='';
+
+    const dist=Math.abs(state.x-c.x)+Math.abs(state.y-c.y);
+    const taxiCost=Math.max(0,dist-2);
+    travelCostEl.textContent = `${dist}m walk · ${taxiCost} cr taxi`;
+
+    const d=document.createElement('div');
+    d.className='item';
+    d.innerHTML=`<div class="meta">${c.desc||'No special features.'}</div>`;
+    locDetails.appendChild(d);
+
+    if(!atHere(c)){
+      const warn=document.createElement('div');
+      warn.className='item';
+      warn.innerHTML=`<div class="meta">You must be at <b>${c.name||'this location'}</b> to use its actions. Walk/Taxi/Drive below.</div>`;
+      locDetails.appendChild(warn);
+    }
+
+    if(c.type==='shop') buildShopActions();
+    if(c.type==='supermarket') buildSuperActions();
+    if(c.type==='restaurant') buildRestaurantActions();
+    if(c.type==='job') buildJobActions();
+    if(c.type==='house' || c.type==='playerhouse') buildHouseActions(c.type==='playerhouse');
+    if(c.type==='warehouse') buildWarehouseActions(c);
+    if(c.type==='fence') buildFenceActions();
+    if(c.type==='weapons') buildWeaponActions();
+    if(c.type==='cardealer') buildCarDealerActions();
+    if(c.type==='gas') buildGasActions();
+    if(c.type==='repair') buildRepairActions();
+    if(c.type==='station') buildStationActions();
+    if(c.type==='office') buildOfficeActions(c);
+    if(c.type==='gang') buildGangActions(c);
+    if(c.type==='crack') buildCrackActions(c);
+    if(c.type==='avstation') buildAVStationActions(c);
+
+    btnWalk.onclick=()=> travelTo(c,dist,'walk',taxiCost);
+    btnTaxi.onclick=()=> travelTo(c,dist,'taxi',taxiCost);
+    btnDrive.onclick=()=> travelTo(c,dist,'drive',taxiCost);
+  }
+
+  const cellTypeName=t=>({shop:'Shop',supermarket:'Supermarket',job:'Job Board',restaurant:'Restaurant',house:'House',playerhouse:'Your Home',warehouse:'Warehouse',fence:'Fence',weapons:'Weapons',cardealer:'Car Dealer',gas:'Gas',repair:'Repair Shop',station:'Old Station',office:'Office', gang:'Gang Territory', crack:'Wall Crack', avstation:'AV Station'})[t]||'Tile';
+
+  // addaction
+  function addAction(name,meta,handler){
+    const it=document.createElement('div');
+    it.className='item';
+
+    const btn=document.createElement('button');
+    btn.className='btn';
+    btn.textContent='Do';
+
+    const here = atHere(selected);
+    if(!here){ btn.disabled = true; btn.title = 'You must be at this location'; it.style.opacity = 0.75; }
+
+    let busy=false;
+    btn.onclick=()=>{
+      if(state.dead){ log('You are dead. Load a save.','bad'); return; }
+      if(!atHere(selected)){ log('You must be at this location to do that. Use Walk/Taxi/Drive below.','warn'); return; }
+      if(busy) return;
+      busy=true;
+      try{ handler(); } finally { setTimeout(()=>busy=false,200); }
+    };
+
+    it.innerHTML=`<div class="row"><div>${name}</div></div><div class="meta">${meta}</div>`;
+    it.querySelector('.row').appendChild(btn);
+    locActions.appendChild(it);
+  }
+
+  function canAfford(n){ return DEV.infMoney? true : state.money>=n; }
+  function pay(n){ if(DEV.infMoney) return true; if(state.money<n) return false; state.money-=n; return true; }
+
+  // actionbuildsytem
+  function buyItem(itemKey,price){
+    if(!pay(price)){ log('Not enough credits.','warn'); return; }
+    const def=items[itemKey];
+    const ok=placeItem(def);
+    if(!ok){ log('No inventory space.','warn'); if(!DEV.infMoney) state.money+=price; return; }
+    syncHUD(); log(`Bought ${def.name}.`);
+  }
+  function buildShopActions(){
+    addAction('Buy Ration','Restores +25 FOOD · 20 cr',()=>buyItem('ration',20));
+    addAction('Buy Water','Restores +25 DRINK · 15 cr',()=>buyItem('water',15));
+    addAction('Buy Medkit','Heals +35 HP · 60 cr',()=>buyItem('medkit',60));
+    addAction('Tactical Gloves','+1 armor · 80 cr',()=>buyItem('gloves',80));
+  }
+  function buildSuperActions(){
+    addAction('Ration Pack','Food +25 · 20 cr',()=>buyItem('ration',20));
+    addAction('Water Bottle','Drink +25 · 15 cr',()=>buyItem('water',15));
+    addAction('Energy Drink','Drink +40 · 25 cr',()=>buyItem('energy',25));
+    addAction('Jacket','Clothing · 120 cr',()=>buyItem('jacket',120));
+    addAction('Combat Boots','+2 armor · 140 cr',()=>buyItem('boots',140));
+    addAction('Kevlar Trenchcoat','Clothing · 420 cr',()=>buyItem('trench',420));
+  }
+  function buildRestaurantActions(){
+    addAction('Eat Meal','+40 FOOD, +5 DRINK · −35 cr, 20m',()=>{ if(!pay(35)){ log('Not enough credits.','warn'); return;} advanceTime(20); addFood(40); addDrink(5); log('You ate a meal.'); syncHUD(); });
+    addAction('Drink Hydra-Soda','+35 DRINK · −18 cr, 5m',()=>{ if(!pay(18)){ log('Not enough credits.','warn'); return;} advanceTime(5); addDrink(35); log('You down a Hydra-Soda.'); syncHUD(); });
+  }
+  function buildJobActions(){
+    addAction('Data-scrape','+45 cr, +12 XP, −10 DRINK, 40m',()=>{ advanceTime(40); state.money+=45; state.xp+=12; addDrink(-10); fatigue(5); log('Completed a data-scrape. +45 cr, +12 XP'); syncHUD();});
+    addAction('Courier Run','+75 cr, +20 XP, −15 FOOD, −15 DRINK, 90m',()=>{ advanceTime(90); state.money+=75; state.xp+=20; addFood(-15); addDrink(-15); fatigue(10); log('You finished a courier run. +75 cr, +20 XP'); syncHUD();});
+  }
+  function buildHouseActions(isHome){
+    addAction('Rest (1h)','+10 HP, +5 FOOD, +5 DRINK',()=>{ advanceTime(60); heal(10); addFood(5); addDrink(5); log('You rest for an hour.'); syncHUD();});
+    if(isHome){ addAction('Sleep (6h)','Restore FOOD/DRINK to 70, heal +25 HP',()=>{ advanceTime(360); heal(25); state.food=Math.max(state.food,70); state.drink=Math.max(state.drink,70); log('You crash at your capsule.'); syncHUD();}); }
+  }
+  function buildWarehouseActions(c){
+    if(state.gig && !state.carriedCargo && state.gig.type==='cargo' && state.gig.pickup.x===c.x && state.gig.pickup.y===c.y && state.gig.sector===currentSector){
+      addAction('Pick up cargo','Load parcel for delivery',()=>{ state.carriedCargo=true; log('Cargo secured. Deliver to '+state.gig.drop.name); syncHUD(); });
+      addAction('Steal cargo','Mark as stolen and fence it later',()=>{ state.carriedCargo=true; state.stolen=true; log('You jacked the cargo. Find a fence.','warn'); syncHUD();});
+    }
+  }
+  function buildFenceActions(){
+    if(state.carriedCargo && state.stolen){
+      addAction('Sell stolen cargo','+120 cr, +10 XP',()=>{ state.carriedCargo=false; state.stolen=false; state.money+=120; state.xp+=10; state.gig=null; log('Sold stolen cargo to the fence.'); syncHUD(); menuPanel.innerHTML=''; });
+    }
+  }
+  function buildWeaponActions(){
+    addAction('Knife','120 cr · power 6',()=>buyItem('knife',120));
+    addAction('Bat','160 cr · power 8',()=>buyItem('bat',160));
+    addAction('Pistol','420 cr · power 12',()=>buyItem('pistol',420));
+    addAction('SMG','900 cr · power 18',()=>buyItem('smg',900));
+    addAction('Armor Vest','280 cr',()=>buyItem('vest',280));
+    addAction('Helmet','180 cr',()=>buyItem('helmet',180));
+  }
+  function buildCarDealerActions(){ addAction('Browse Cars','Different fuel use & reliability',()=> openGarage()); }
+  function buildGasActions(){ addAction('Refuel','50 fuel · 40 cr',()=>{ if(!state.vehicle){ log('No vehicle','warn'); return;} if(!pay(40)){ log('Not enough credits.','warn'); return;} state.vehicle.fuel=Math.min(state.vehicle.fuelMax,(state.vehicle.fuel||0)+50); log('Refueled.'); syncHUD(); }); }
+  function buildRepairActions(){ addAction('Repair','+30 vehicle health · 60 cr',()=>{ if(!state.vehicle){ log('No vehicle.','warn'); return;} if(!pay(60)){ log('Not enough credits.','warn'); return;} state.vehicle.health=Math.min(100,(state.vehicle.health||100)+30); log('Repaired.'); syncHUD(); }); }
+  function buildStationActions(){ addAction('Use Old Station','Start generator then hack AV',()=> startOldStation()); }
+  function buildCrackActions(c){
+    addAction('Crawl through the crack','Take 30 damage and move to the linked sector',()=>{
+      fatigue(30);
+      if(state.dead) return;
+      const target = (currentSector==='A'?'C': currentSector==='B'?'C':'A');
+      switchSector(target);
+      log('Squeezed through the breach. Your body aches (−30 HP).','warn');
+    });
+  }
+  function buildAVStationActions(c){
+    const FARE=250;
+    addAction('Book AV flight','Fly to any sector · '+FARE+' cr',()=>{
+      const box=document.createElement('div'); box.className='item';
+      box.innerHTML='<div><b>Select destination</b></div>';
+      Object.keys(SECTORS).forEach(key=>{
+        if(key===currentSector) return;
+        const b=document.createElement('button'); b.className='btn';
+        b.textContent='Fly to '+(SECTORS[key].name||('Sector '+key));
+        b.onclick=()=>{ if(!pay(FARE)){ log('Not enough credits for AV flight.','warn'); return;} switchSector(key); log('AV flight complete (−'+FARE+' cr).'); locActions.innerHTML=''; };
+        box.appendChild(b);
+      });
+      locActions.innerHTML=''; locActions.appendChild(box);
+    });
+  }
+
+  //jobs
+  function buildOfficeActions(){
+    if(state.xp >= 10){ addAction('Office Worker','Requires 10 XP. Do 3 tasks (Move File / Send Email) for 325 cr.',()=> startOfficeMini('office')); }
+    else { addAction('Office Worker','Requires 10 XP. Gain more XP to unlock.',()=> log('You need 10 XP to work office admin.','warn')); }
+    if(state.xp >= 5){ addAction('IT Technician','Requires 5 XP. Do 3 tasks (Plug Computer / Connect Wi-Fi) for 150 cr.',()=> startOfficeMini('it')); }
+    else { addAction('IT Technician','Requires 5 XP. Gain more XP to unlock.',()=> log('You need 5 XP to work IT.','warn')); }
+  }
+  function startOfficeMini(role){
+    const box=document.createElement('div'); box.className='item'; let done=0;
+    function render(){ box.innerHTML='';
+      if(role==='office'){
+        box.innerHTML+='<div><b>Office Worker</b> — complete 3 tasks</div>';
+        ['Move File','Send Email'].forEach(t=>{ const b=document.createElement('button'); b.className='btn'; b.textContent=t; b.onclick=()=>{ done++; advanceTime(10); log('Admin task completed.'); if(done>=3) finishOfficeJob('office'); else render(); }; box.appendChild(b); });
+      } else {
+        box.innerHTML+='<div><b>IT Technician</b> — complete 3 tasks</div>';
+        ['Plug Computer','Connect Wi-Fi'].forEach(t=>{ const b=document.createElement('button'); b.className='btn'; b.textContent=t; b.onclick=()=>{ done++; advanceTime(10); log('IT task completed.'); if(done>=3) finishOfficeJob('it'); else render(); }; box.appendChild(b); });
+      }
+    }
+    render(); locActions.innerHTML=''; locActions.appendChild(box);
+  }
+  function finishOfficeJob(role){ if(role==='office'){ state.money+=325; state.xp+=12; log('Office Worker shift: +325 cr, +12 XP'); } else { state.money+=150; state.xp+=8; log('IT Technician shift: +150 cr, +8 XP'); } syncHUD(); selectLocation(map[state.y][state.x]); }
+
+  //
+  function buildGangActions(c){
+    addAction('Engage Gang','Undertale-style timing strike combat',()=>{
+      startCombat({name:c.name||'Gang Thug', hp:50, atk:8, armor:2, rewardMoney:90, rewardXP:18, dropCargo:false});
+    });
+  }
+  function startCombat(enemy){
+    const box=document.createElement('div'); box.className='item barwrap';
+    let eHP=enemy.hp, phase='player', cursor=0, dir=1, int=null;
+    function stop(){ if(int) clearInterval(int); int=null; }
+    function render(){
+      box.innerHTML='';
+      const head=document.createElement('div'); head.innerHTML=`<b>${enemy.name}</b> — HP ${Math.max(0,Math.round(eHP))}`;
+      const you=document.createElement('div'); you.className='small'; you.textContent=`You — HP ${Math.max(0,Math.round(state.hp))}`;
+      box.appendChild(head); box.appendChild(you);
+      if(phase==='player'){
+        const tr=document.createElement('div'); tr.className='timetrack';
+        const hit=document.createElement('div'); hit.className='hitzone'; hit.style.left='40%'; hit.style.right='40%';
+        const cur=document.createElement('div'); cur.className='timercur'; tr.appendChild(hit); tr.appendChild(cur); box.appendChild(tr);
+        const btn=document.createElement('button'); btn.className='btn'; btn.textContent='Strike'; box.appendChild(btn);
+        int=setInterval(()=>{ cursor+=dir*2; if(cursor<=0||cursor>=100) dir*=-1; cur.style.left=(cursor)+'%'; },20);
+        btn.onclick=()=>{
+          stop();
+          const center=50; const dist=Math.abs(cursor-center);
+          const timingMult = Math.max(0.4, 1 - (dist/50));
+          const dmgBase=4+weaponPower();
+          const dmg = Math.max(1, Math.round((dmgBase - enemy.armor) * timingMult));
+          eHP-=dmg; log(`You strike for ${dmg} damage.`);
+          if(eHP<=0){ onWin(); return; }
+          phase='enemy'; render();
+        };
+      } else {
+        const tr=document.createElement('div'); tr.className='timetrack';
+        const hit=document.createElement('div'); hit.className='hitzone'; hit.style.left='30%'; hit.style.right='30%';
+        const cur=document.createElement('div'); cur.className='timercur'; tr.appendChild(hit); tr.appendChild(cur); box.appendChild(tr);
+        const btn=document.createElement('button'); btn.className='btn'; btn.textContent='Dodge'; box.appendChild(btn);
+        cursor=0; dir=1;
+        int=setInterval(()=>{ cursor+=dir*3; if(cursor<=0||cursor>=100) dir*=-1; cur.style.left=(cursor)+'%'; },20);
+        btn.onclick=()=>{
+          stop();
+          const center=50; const dist=Math.abs(cursor-center);
+          const avoid = Math.max(0, 1 - (dist/50));
+          const armorReduce = calcArmor()/200;
+          const raw = enemy.atk * (1 - avoid*0.8);
+          const taken = Math.max(1, Math.round(raw * (1 - armorReduce)));
+          fatigue(taken);
+          log(`Enemy hits for ${taken} damage.`,'warn');
+          if(state.dead){ locActions.innerHTML=''; return; }
+          phase='player'; render();
+        };
+      }
+    }
+    function onWin(){
+      stop(); log(`${enemy.name} defeated.`, 'ok');
+      if(enemy.rewardMoney) state.money+=enemy.rewardMoney;
+      if(enemy.rewardXP) state.xp+=enemy.rewardXP;
+      syncHUD(); selectLocation(map[state.y][state.x]);
+    }
+    locActions.innerHTML=''; locActions.appendChild(box); render();
+  }
+
+  // the abbility to move
+  btnWalk.onclick=()=>{}; btnTaxi.onclick=()=>{}; btnDrive.onclick=()=>{}; // set by selectLocation
+  function travelTo(c,minutes,mode='walk',taxiCost=0){
+    if(state.dead){ log('You are dead. Load a save.','bad'); return;}
+    if(c.x===state.x&&c.y===state.y){ log('You are already here.','warn'); return; }
+    if(mode==='taxi'){
+      if(!pay(taxiCost)){ log('Not enough credits.','warn'); return;}
+      advanceTime(minutes); moveTo(c,false);
+      log(`Taxi to ${c.name||('('+c.x+','+c.y+')')} (−${taxiCost} cr, ${minutes}m).`);
+    } else if(mode==='drive'){
+      if(!state.vehicle){ log('No vehicle.','warn'); return;}
+      const fuelNeed=Math.ceil(minutes*(state.vehicle.fuelPerTile||0.5));
+      if((state.vehicle.fuel||0)<fuelNeed){ log('Not enough fuel.','warn'); return;}
+      state.vehicle.fuel-=fuelNeed;
+      const breakChance=Math.max(0.02,0.18 - (state.vehicle.quality||50)/150);
+      if(Math.random()<breakChance){ state.vehicle.health=Math.max(0,(state.vehicle.health||100)-20); log('Your car coughed and lost some health.', 'warn'); }
+      advanceTime(minutes); moveTo(c,false);
+      log(`Drove to ${c.name||('('+c.x+','+c.y+')')} (${minutes}m, −${fuelNeed} fuel).`);
+    } else {
+      advanceTime(minutes); moveTo(c,true);
+      log(`Walked to ${c.name||('('+c.x+','+c.y+')')} (${minutes}m).`);
+    }
+  }
+  function moveTo(c,drain){
+    const oldX=state.x, oldY=state.y; state.x=c.x; state.y=c.y; renderMap();
+    if(drain){
+      const dd=Math.abs(c.x-oldX)+Math.abs(c.y-oldY);
+      addFood(-Math.ceil(Math.max(1,dd)/6));
+      addDrink(-Math.ceil(Math.max(1,dd)/5));
+      let dmg=1; const armor=calcArmor(); const reduc=1 - Math.min(0.6, armor/200); fatigue(dmg*reduc);
+    }
+    syncHUD();
+    updateCoords();
+  }
+
+  // time and stats
+  function heal(n){ state.hp=Math.min(100,state.hp+n); }
+  function addFood(n){ state.food=Math.max(0,Math.min(100,state.food+n)); }
+  function addDrink(n){ state.drink=Math.max(0,Math.min(100,state.drink+n)); }
+  function fatigue(n){ state.hp=Math.max(0,state.hp-n); if(state.hp<=0){ state.dead=true; log('You died. Load a save.','bad'); } }
+  function advanceTime(mins){ for(let i=0;i<mins;i++) tickMinute(); }
+  function tickMinute(){
+    state.minute++;
+    if(state.minute>=1440){ state.minute=0; state.day++; log('A new day.'); }
+    if(state.minute%5===0) addFood(-1);
+    if(state.minute%4===0) addDrink(-1);
+    if(state.food===0||state.drink===0) fatigue(0.2);
+    if(state.gig && state.gig.deadline){ state.gig.remaining--; if(state.gig.remaining<=0){ log('Gig expired.','bad'); state.gig=null; state.carriedCargo=false; state.stolen=false; } }
+  }
+
+
+  document.getElementById('btnEat').onclick=()=>{ const pos=findItem('ration'); if(!pos){ log('No rations.','warn'); return;} removeAt(pos.x,pos.y); addFood(+25); log('You eat a ration.'); syncHUD(); };
+  document.getElementById('btnDrink').onclick=()=>{ const pos=findItem('water')||findItem('energy'); if(!pos){ log('No drink.','warn'); return;} const it=invGrid[pos.y][pos.x]; removeAt(pos.x,pos.y); if(it.id==='energy') addDrink(+40); else addDrink(+25); log('You drink.'); syncHUD(); };
+  document.getElementById('btnMed').onclick=()=>{ const pos=findItem('medkit'); if(!pos){ log('No medkits.','warn'); return;} removeAt(pos.x,pos.y); heal(35); log('Medkit applied.'); syncHUD(); };
+  document.getElementById('btnSave').onclick=()=>{ saveGame(true); };
+  document.getElementById('btnLoad').onclick=()=>{ loadGame(); };
+
+  // menu
+  document.getElementById('btnPhone').onclick=()=> renderPhone();
+  document.getElementById('btnCharacter').onclick=()=> renderChar();
+  document.getElementById('btnInventory').onclick=()=> openInventory();
+  document.getElementById('btnGarage').onclick=()=> openGarage();
+  document.getElementById('btnSettings').onclick=()=> openSettings();
+
+  function renderPhone(){
+    menuPanel.innerHTML=''; const list=document.createElement('div'); list.className='list';
+    const fixers=[
+      {name:'Vera Sparks', offer: offerCargoGig('A',{x:6,y:5,name:'South Docks Warehouse'},{sector:'B',x:6,y:6,name:'North Stack Warehouse'},200,300)},
+      {name:'Mr. Obsidian', offer: offerCargoGig('B',{sector:'B',x:6,y:6,name:'North Stack Warehouse'},{sector:'A',x:26,y:13,name:'Courier Hub'},260,420)},
+      {name:'Kira Flux', offer: offerRaidGig('B', findFirstCoord('B','gang'), {sector:'C',x:30,y:7,name:'Shiver Fence'}, 380, 360)},
+      {name:'Rivet', offer: offerRaidGig('C', findFirstCoord('C','gang'), {sector:'A',x:34,y:9,name:'Shadow Fence'}, 420, 360)}
+    ];
+    fixers.forEach(f=>{
+      const it=document.createElement('div'); it.className='item';
+      it.innerHTML=`<div class="row"><div>Call ${f.name}</div><button class="btn">Dial</button></div><div class="meta">Request a gig.</div>`;
+      it.querySelector('button').onclick=()=>{ state.gig=f.offer; const g=state.gig;
+        if(g.type==='cargo') log(`Fixer ${f.name} offered cargo: pick up at ${g.pickup.name} (${g.sector}) → deliver to ${g.drop.name} (${g.drop.sector}) for ${g.pay} cr. Deadline ${g.remaining}m.`);
+        else log(`Fixer ${f.name} offered raid: attack turf at (${g.target.x},${g.target.y}) in ${g.sector}, then deliver stolen cargo to ${g.drop.name} for ${g.pay} cr. Deadline ${g.remaining}m.`);
+        renderPhone();
+      };
+      list.appendChild(it);
+    });
+    if(state.gig){
+      const panel=document.createElement('div'); panel.className='item';
+      if(state.gig.type==='cargo'){
+        panel.innerHTML=`<div class="row"><div>Active Gig</div><div class="meta">${state.gig.pickup.name} (${state.gig.sector}) → ${state.gig.drop.name} (${state.gig.drop.sector}) · pay ${state.gig.pay} cr · ${state.gig.remaining}m left</div></div>`;
+      } else {
+        panel.innerHTML=`<div class="row"><div>Active Raid</div><div class="meta">Hit gang at (${state.gig.target.x},${state.gig.target.y}) in ${state.gig.sector} → deliver to ${state.gig.drop.name} · pay ${state.gig.pay} cr · ${state.gig.remaining}m</div></div>`;
+      }
+      list.appendChild(panel);
+    }
+    menuPanel.appendChild(list);
+  }
+  function offerCargoGig(pSector,pick,drop,pay,deadline){ return { type:'cargo', sector:pSector, pickup:{x:pick.x,y:pick.y,name:pick.name}, drop:{x:drop.x,y:drop.y,name:drop.name,sector:drop.sector}, pay, deadline:true, remaining:deadline, dropSector:drop.sector }; }
+  function offerRaidGig(sector,targetCoord,drop,pay,deadline){ return { type:'raid', sector, target:targetCoord, drop:{x:drop.x,y:drop.y,name:drop.name,sector:drop.sector}, pay, deadline:true, remaining:deadline }; }
+  function findFirstCoord(sector, kind){ const m=SECTORS[sector].build(); for(let y=0;y<H;y++) for(let x=0;x<W;x++){ const c=m[y][x]; if(c.type===kind) return {x,y}; } return {x:3,y:3}; }
+
+  function renderChar(){
+    menuPanel.innerHTML='';
+    const box=document.createElement('div'); box.className='item';
+    const grid=document.createElement('div'); grid.className='gearline';
+    function slot(label,key){
+      const wrap=document.createElement('div'); wrap.className='slotcard';
+      const nm=document.createElement('div'); nm.className='slotname'; nm.textContent=label;
+      const val=document.createElement('div'); val.className='slotval'; const id=gear[key]; val.textContent=id? items[id].name : 'None';
+      wrap.appendChild(nm); wrap.appendChild(val); grid.appendChild(wrap);
+    }
+    slot('Armor','armor'); slot('Helmet','helmet'); slot('Clothes','clothes'); slot('Gloves','gloves'); slot('Boots','boots'); slot('Weapon','weapon');
+    const arm=document.createElement('div'); arm.className='small'; arm.textContent='Armor Rating: '+Math.round(calcArmor())+'  •  Weapon Power: '+weaponPower();
+    box.appendChild(grid); box.appendChild(arm); menuPanel.appendChild(box);
+  }
+
+  function openGarage(){
+    menuPanel.innerHTML='';
+    const cars=[
+      {name:'Rust Runner',price:200,fuelPerTile:.8,quality:30,fuelMax:80},
+      {name:'Metro Cruiser',price:650,fuelPerTile:.5,quality:70,fuelMax:120},
+      {name:'Volt GT',price:1500,fuelPerTile:.35,quality:95,fuelMax:160}
+    ];
+    cars.forEach(car=>{
+      const it=document.createElement('div'); it.className='item';
+      it.innerHTML=`<div class="row"><div>${car.name}</div><button class="btn">Buy</button></div><div class="meta">${car.price} cr · fuel/tile ${car.fuelPerTile} · quality ${car.quality}</div>`;
+      it.querySelector('button').onclick=()=>{ if(!pay(car.price)){ log('Not enough credits.','warn'); return;} state.vehicle=Object.assign({},car,{fuel:car.fuelMax,health:100}); log(`Purchased ${car.name}.`); syncHUD(); openGarage(); };
+      menuPanel.appendChild(it);
+    });
+    if(state.vehicle){
+      const it=document.createElement('div'); it.className='item';
+      it.innerHTML=`<div>Current vehicle: ${state.vehicle.name} <span class="meta">fuel ${state.vehicle.fuel}/${state.vehicle.fuelMax} · health ${state.vehicle.health}</span></div>`;
+      menuPanel.appendChild(it);
+    }
+  }
+
+    // sector
+  function switchSector(key){
+    currentSector=key;
+    map=SECTORS[currentSector].build();
+    const road = findFirst(map, t=>t.type==='road');
+    if(road){ state.x=road.x+1; state.y=road.y; }
+    renderMap(); syncHUD();
+    updateCoords();
+  }
+  function findFirst(m, pred){ for(let y=0;y<H;y++) for(let x=0;x<W;x++){ if(pred(m[y][x])) return m[y][x]; } return null; }
+
+  // inv
+  function openInventory(){
+    menuPanel.innerHTML=''; const box=document.createElement('div'); box.className='item';
+    const grid=document.createElement('div'); grid.className='invgrid'; let sel=null;
+    for(let y=0;y<GRID_H;y++) for(let x=0;x<GRID_W;x++){
+      const c=document.createElement('div'); c.className='invcell'; c.dataset.x=x; c.dataset.y=y; drawCell(c,x,y);
+      c.onclick=()=>{ if(state.dead){ log('You are dead. Load a save.','bad'); return;} if(sel){ moveItem(sel.x,sel.y,x,y); sel.classList.remove('sel'); sel=null; openInventory(); } else { if(invGrid[y][x] && invGrid[y][x].root){ c.classList.add('sel'); sel=c; } } };
+      grid.appendChild(c);
+    }
+    box.appendChild(grid);
+    const actions=document.createElement('div'); const use=document.createElement('button'); use.className='btn'; use.textContent='Use/Equip Selected';
+    use.onclick=()=>{ const c=grid.querySelector('.invcell.sel'); if(!c){ log('Select an item.','warn'); return;} const x=+c.dataset.x,y=+c.dataset.y; const it=invGrid[y][x]; if(!it){ log('Empty.','warn'); return;} if(items[it.id].consume){ consume(it.id); removeAt(x,y); openInventory(); return; } if(items[it.id].slot){ equip(it.id); removeAt(x,y); openInventory(); return; } log('Cannot use.','warn'); };
+    actions.appendChild(use); box.appendChild(actions); menuPanel.appendChild(box);
+  }
+  function drawCell(el,x,y){ const it=invGrid[y][x]; el.textContent=(it && it.root)? it.id[0].toUpperCase():''; }
+  function placeItem(def){
+    const w=def.w,h=def.h;
+    for(let y=0;y<=GRID_H-h;y++) for(let x=0;x<=GRID_W-w;x++){
+      if(fits(x,y,w,h)){
+        for(let yy=0;yy<h;yy++) for(let xx=0;xx<w;xx++){
+          invGrid[y+yy][x+xx]={id:def.id,root:(yy===0&&xx===0),w:def.w,h:def.h};
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+  function fits(x,y,w,h){ for(let yy=0;yy<h;yy++) for(let xx=0;xx<w;xx++){ if(invGrid[y+yy][x+xx]) return false; } return true; }
+  function removeAt(x,y){
+    const root=findRoot(x,y); if(!root) return;
+    const it=invGrid[root.y][root.x]; const w=it.w,h=it.h;
+    for(let yy=0;yy<h;yy++) for(let xx=0;xx<w;xx++){ invGrid[root.y+yy][root.x+xx]=null; }
+  }
+  function findRoot(x,y){
+    const it=invGrid[y][x]; if(!it) return null;
+    for(let yy=0; yy<it.h; yy++){
+      for(let xx=0; xx<it.w; xx++){
+        const rx = x-xx, ry = y-yy;
+        if(ry>=0 && rx>=0 && invGrid[ry][rx] && invGrid[ry][rx].root && invGrid[ry][rx].id===it.id) return {x:rx,y:ry};
+      }
+    }
+    return null;
+  }
+  function moveItem(sx,sy,dx,dy){
+    const root=findRoot(sx,sy); if(!root) return false;
+    const it=invGrid[root.y][root.x];
+    if(!fits(dx,dy,it.w,it.h)) return false;
+    removeAt(root.x,root.y);
+    for(let yy=0;yy<it.h;yy++) for(let xx=0;xx<it.w;xx++){ invGrid[dy+yy][dx+xx]={id:it.id,root:(yy===0&&xx===0),w:it.w,h:it.h}; }
+    return true;
+  }
+  function findItem(id){
+    for(let y=0;y<GRID_H;y++) for(let x=0;x<GRID_W;x++){ const it=invGrid[y][x]; if(it && it.root && it.id===id) return {x,y}; }
+    return null;
+  }
+  function consume(id){
+    if(id==='ration') addFood(25);
+    if(id==='water') addDrink(25);
+    if(id==='energy') addDrink(40);
+    if(id==='medkit') heal(35);
+  }
+  function equip(id){
+    const def=items[id]; if(!def||!def.slot) return;
+    gear[def.slot]=id; log(`Equipped ${def.name}.`);
+  }
+
+  // settings
+  function saveGame(manual=false){
+    const payload={state,gear,invGrid,settings,currentSector};
+    localStorage.setItem('neonSave', JSON.stringify(payload));
+    if(manual || settings.saveAnnounce) log('Game saved.');
+  }
+  function loadGame(){
+    const t=localStorage.getItem('neonSave'); if(!t){ log('No save found.','warn'); return;}
+    try{
+      const p=JSON.parse(t);
+      Object.assign(state,p.state||{});
+      Object.assign(gear,p.gear||{});
+      if(p.invGrid) for(let y=0;y<GRID_H;y++) for(let x=0;x<GRID_W;x++) invGrid[y][x]=p.invGrid[y][x];
+      Object.assign(settings,p.settings||{});
+      currentSector=p.currentSector||currentSector;
+      map=SECTORS[currentSector].build();
+      renderMap(); syncHUD(); log('Game loaded.');
+    }catch(e){ log('Load failed.','bad'); }
+  }
+  function openSettings(){
+    menuPanel.innerHTML='';
+    const box=document.createElement('div'); box.className='item';
+    const html=`
+      <div><b>Settings</b></div>
+      <div class="meta">Autosave: <span id="sAuto">${settings.autosave?'ON':'OFF'}</span> (interval ${settings.autosaveInterval}s)</div>
+      <div class="meta">Announce autosave: <span id="sAnn">${settings.saveAnnounce?'ON':'OFF'}</span></div>
+      <div class="meta">Console clear after: <span id="sLog">${settings.logExpire}s</span></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn" id="tAuto">Toggle Autosave</button>
+        <button class="btn" id="iAuto">Interval +30s</button>
+        <button class="btn" id="tAnn">Toggle Announce</button>
+        <button class="btn" id="lPlus">Log +10s</button>
+        <button class="btn" id="lMinus">Log −10s</button>
+      </div>`;
+    box.innerHTML=html; menuPanel.appendChild(box);
+    box.querySelector('#tAuto').onclick=()=>{ settings.autosave=!settings.autosave; box.querySelector('#sAuto').textContent=settings.autosave?'ON':'OFF'; setupAutosave(); };
+    box.querySelector('#iAuto').onclick=()=>{ settings.autosaveInterval=Math.min(600,settings.autosaveInterval+30); box.querySelector('#sAuto').textContent=`${settings.autosave?'ON':'OFF'}`; };
+    box.querySelector('#tAnn').onclick=()=>{ settings.saveAnnounce=!settings.saveAnnounce; box.querySelector('#sAnn').textContent=settings.saveAnnounce?'ON':'OFF'; };
+    box.querySelector('#lPlus').onclick=()=>{ settings.logExpire+=10; box.querySelector('#sLog').textContent=settings.logExpire+'s'; };
+    box.querySelector('#lMinus').onclick=()=>{ settings.logExpire=Math.max(10,settings.logExpire-10); box.querySelector('#sLog').textContent=settings.logExpire+'s'; };
+  }
+  function setupAutosave(){
+    if(intervals.autosave) clearInterval(intervals.autosave);
+    if(settings.autosave) intervals.autosave=setInterval(()=> saveGame(false), settings.autosaveInterval*1000);
+  }
+  function setupLogCleaner(){
+    if(intervals.logClean) clearInterval(intervals.logClean);
+    intervals.logClean=setInterval(()=>{
+      const now=Date.now();
+      const kids=[...logEl.children];
+      kids.forEach(k=>{ const ts=+k.dataset.ts||now; if(now-ts>settings.logExpire*1000) k.remove(); });
+    },1000);
+  }
+
+  // intro
+  function bootIntroOnce(){
+    // note make it so you can toggle this later
+    log('Welcome to netrunner — made by skitonix.');
+    log('here is how to play use the side menus to use your phone, Inventory, Garage, and Settings.');
+    log('look at the bottom of the ASCII map and thats the buildings list it shows what color, and the name of buildings');
+    log('to interact with buildings click on you (the triangle) and when at a location to move locations click on the building and then press one of the move options.');
+    log('Walk,Taxi,Drive on the right. also the game is for now a sandbox game but there will be a campaign but for now its a sanbox game');
+  }
+
+  renderMap(); syncHUD(); bootIntroOnce(0); setupAutosave(); setupLogCleaner();
+  </script>
+</body>
+</html>
