@@ -1,9 +1,9 @@
 # Netrunner
-By onix dev team
+By the Onix Dev Team
 
-Welcome to netrunner
+Welcome to Netrunner
 
-The game's theme is a cyberpunk sci-fi world
+The game's theme is a Cyberpunk sci-fi world
 
 The game's story is that you're a netrunner and you got hacked; 
 your biochip has a virus that you can't remove, and 
